@@ -9,23 +9,19 @@
 
 #include "feature_tracker.h"
 
-#define SHOW_UNDISTORTION 0
-
-vector<uchar> r_status;
-vector<float> r_err;
-queue<sensor_msgs::ImageConstPtr> img_buf;
+using namespace vins;
 
 ros::Publisher pub_img, pub_match;
 ros::Publisher pub_restart;
-
 FeatureTracker trackerData[NUM_OF_CAM];
-double first_image_time;
-int pub_count = 1;
-bool first_image_flag = true;
-double last_image_time = 0;
-bool init_pub = 0;
 
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
+  static int pub_count = 1;
+  static bool init_pub = false;
+  static bool first_image_flag = true;
+  static double first_image_time = 0.;
+  static double last_image_time = 0.;
+
   if (first_image_flag) {
     first_image_flag = false;
     first_image_time = img_msg->header.stamp.toSec();
@@ -36,13 +32,15 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
   if (img_msg->header.stamp.toSec() - last_image_time > 1.0 || img_msg->header.stamp.toSec() < last_image_time) {
     ROS_WARN("image discontinue! reset the feature tracker!");
     first_image_flag = true;
-    last_image_time = 0;
+    last_image_time = 0.;
     pub_count = 1;
+
     std_msgs::Bool restart_flag;
     restart_flag.data = true;
     pub_restart.publish(restart_flag);
     return;
   }
+
   last_image_time = img_msg->header.stamp.toSec();
   // frequency control
   if (round(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time)) <= FREQ) {
@@ -83,7 +81,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
         trackerData[i].cur_img = ptr->image.rowRange(ROW * i, ROW * (i + 1));
     }
 
-#if SHOW_UNDISTORTION
+#ifdef SHOW_UNDISTORTION
     trackerData[i].showUndistortion("undistrotion_" + std::to_string(i));
 #endif
   }
@@ -107,7 +105,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
     feature_points->header = img_msg->header;
     feature_points->header.frame_id = "world";
 
-    vector<set<int>> hash_ids(NUM_OF_CAM);
+    std::vector<std::set<int>> hash_ids(NUM_OF_CAM);
     for (int i = 0; i < NUM_OF_CAM; i++) {
       auto &un_pts = trackerData[i].cur_un_pts;
       auto &cur_pts = trackerData[i].cur_pts;
@@ -185,7 +183,9 @@ int main(int argc, char **argv) {
   ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
   readParameters(n);
 
-  for (int i = 0; i < NUM_OF_CAM; i++) trackerData[i].readIntrinsicParameter(CAM_NAMES[i]);
+  for (int i = 0; i < NUM_OF_CAM; i++) {
+    trackerData[i].readIntrinsicParameter(CAM_NAMES[i]);
+  }
 
   if (FISHEYE) {
     for (int i = 0; i < NUM_OF_CAM; i++) {
@@ -203,10 +203,6 @@ int main(int argc, char **argv) {
   pub_img = n.advertise<sensor_msgs::PointCloud>("feature", 1000);
   pub_match = n.advertise<sensor_msgs::Image>("feature_img", 1000);
   pub_restart = n.advertise<std_msgs::Bool>("restart", 1000);
-  /*
-  if (SHOW_TRACK)
-      cv::namedWindow("vis", cv::WINDOW_NORMAL);
-  */
   ros::spin();
   return 0;
 }
