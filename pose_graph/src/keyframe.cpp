@@ -1,5 +1,7 @@
 #include "keyframe.h"
 
+namespace vins {
+
 template <typename Derived>
 static void reduceVector(vector<Derived> &v, vector<uchar> status) {
   int j = 0;
@@ -520,3 +522,5 @@ BriefExtractor::BriefExtractor(const std::string &pattern_file) {
 
   m_brief.importPairs(x1, y1, x2, y2);
 }
+
+}  // namespace vins

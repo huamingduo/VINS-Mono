@@ -1,9 +1,8 @@
 #pragma once
 
-#include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Eigen>
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/opencv.hpp>
-#include <vector>
 
 #include "ThirdParty/DBoW/DBoW2.h"
 #include "ThirdParty/DVision/DVision.h"
@@ -19,6 +18,8 @@
 using namespace Eigen;
 using namespace std;
 using namespace DVision;
+
+namespace vins {
 
 class BriefExtractor {
  public:
@@ -87,3 +88,5 @@ class KeyFrame {
   int loop_index;
   Eigen::Matrix<double, 8, 1> loop_info;
 };
+
+}  // namespace vins

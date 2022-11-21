@@ -1,19 +1,17 @@
 #pragma once
 
-#include <assert.h>
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
 #include <geometry_msgs/PointStamped.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
+#include <ros/package.h>
 #include <ros/ros.h>
-#include <stdio.h>
 
-#include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Eigen>
 #include <mutex>
 #include <opencv2/opencv.hpp>
 #include <queue>
-#include <string>
 #include <thread>
 
 #include "ThirdParty/DBoW/DBoW2.h"
@@ -25,55 +23,67 @@
 #include "utility/tic_toc.h"
 #include "utility/utility.h"
 
-#define SHOW_S_EDGE false
-#define SHOW_L_EDGE true
-#define SAVE_LOOP_PATH true
+// #define SHOW_S_EDGE
+#define SHOW_L_EDGE
+#define SAVE_LOOP_PATH
 
 using namespace DVision;
 using namespace DBoW2;
+
+namespace vins {
 
 class PoseGraph {
  public:
   PoseGraph();
   ~PoseGraph();
+
   void registerPub(ros::NodeHandle& n);
-  void addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop);
-  void loadKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop);
   void loadVocabulary(std::string voc_path);
-  void updateKeyFrameLoop(int index, Eigen::Matrix<double, 8, 1>& _loop_info);
-  KeyFrame* getKeyFrame(int index);
-  nav_msgs::Path path[10];
-  nav_msgs::Path base_path;
-  CameraPoseVisualization* posegraph_visualization;
   void savePoseGraph();
   void loadPoseGraph();
   void publish();
-  Vector3d t_drift;
-  double yaw_drift;
-  Matrix3d r_drift;
-  // world frame( base sequence or first sequence)<----> cur sequence frame
-  Vector3d w_t_vio;
-  Matrix3d w_r_vio;
+
+  void addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop);
+  void updateKeyFrameLoop(int index, Eigen::Matrix<double, 8, 1>& _loop_info);
 
  private:
+  KeyFrame* getKeyFrame(int index);
+  void loadKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop);
   int detectLoop(KeyFrame* keyframe, int frame_index);
   void addKeyFrameIntoVoc(KeyFrame* keyframe);
   void optimize4DoF();
   void updatePath();
-  list<KeyFrame*> keyframelist;
+
+ public:
+  CameraPoseVisualization* posegraph_visualization;
+
+  Eigen::Vector3d t_drift = Eigen::Vector3d::Zero();
+  Eigen::Matrix3d r_drift = Eigen::Matrix3d::Identity();
+  // world frame( base sequence or first sequence)<----> cur sequence frame
+  Eigen::Vector3d w_t_vio = Eigen::Vector3d::Zero();
+  Eigen::Matrix3d w_r_vio = Eigen::Matrix3d::Identity();
+
+ private:
+  nav_msgs::Path path[10];
+  nav_msgs::Path base_path;
+
   std::mutex m_keyframelist;
   std::mutex m_optimize_buf;
   std::mutex m_path;
   std::mutex m_drift;
   std::thread t_optimization;
-  std::queue<int> optimize_buf;
 
-  int global_index;
-  int sequence_cnt;
-  vector<bool> sequence_loop;
-  map<int, cv::Mat> image_pool;
-  int earliest_loop_index;
-  int base_sequence;
+  std::vector<bool> sequence_loop = {false};
+  std::map<int, cv::Mat> image_pool;
+  std::queue<int> optimize_buf;
+  std::list<KeyFrame*> keyframelist;
+
+  int global_index = 0;
+  int sequence_cnt = 0;
+  int earliest_loop_index = -1;
+  int base_sequence = 1;
+
+  double yaw_drift = 0.;
 
   BriefDatabase db;
   BriefVocabulary* voc;
@@ -221,3 +231,5 @@ struct FourDOFWeightError {
   double relative_yaw, pitch_i, roll_i;
   double weight;
 };
+
+}  // namespace vins
