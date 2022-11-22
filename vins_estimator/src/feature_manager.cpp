@@ -1,5 +1,7 @@
 #include "feature_manager.h"
 
+namespace vins {
+
 int FeaturePerId::endFrame() { return start_frame + feature_per_frame.size() - 1; }
 
 FeatureManager::FeatureManager(Matrix3d _Rs[]) : Rs(_Rs) {
@@ -302,3 +304,5 @@ double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int f
 
   return ans;
 }
+
+}  // namespace vins

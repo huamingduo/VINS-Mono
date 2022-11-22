@@ -1,5 +1,4 @@
-#ifndef FEATURE_MANAGER_H
-#define FEATURE_MANAGER_H
+#pragma once
 
 #include <algorithm>
 #include <list>
@@ -7,13 +6,15 @@
 #include <vector>
 using namespace std;
 
-#include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Eigen>
 using namespace Eigen;
 
 #include <ros/assert.h>
 #include <ros/console.h>
 
 #include "parameters.h"
+
+namespace vins {
 
 class FeaturePerFrame {
  public:
@@ -92,4 +93,4 @@ class FeatureManager {
   Matrix3d ric[NUM_OF_CAM];
 };
 
-#endif
+}  // namespace vins

@@ -1,5 +1,7 @@
 #include "estimator.h"
 
+namespace vins {
+
 Estimator::Estimator() : f_manager{Rs} {
   ROS_INFO("init begins");
   clearState();
@@ -184,6 +186,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     last_P0 = Ps[0];
   }
 }
+
 bool Estimator::initialStructure() {
   TicToc t_sfm;
   // check imu observibility
@@ -947,3 +950,5 @@ void Estimator::setReloFrame(double _frame_stamp, int _frame_index, vector<Vecto
     }
   }
 }
+
+}  // namespace vins

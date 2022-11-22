@@ -1,10 +1,10 @@
 #pragma once
 
-#include <ceres/ceres.h>
-#include <std_msgs/Float32.h>
 #include <std_msgs/Header.h>
 
+#include <eigen3/Eigen/Eigen>
 #include <opencv2/core/eigen.hpp>
+#include <opencv2/opencv.hpp>
 #include <queue>
 #include <unordered_map>
 
@@ -22,6 +22,8 @@
 #include "utility/tic_toc.h"
 #include "utility/utility.h"
 
+namespace vins {
+
 class Estimator {
  public:
   Estimator();
@@ -35,6 +37,8 @@ class Estimator {
 
   // internal
   void clearState();
+
+ private:
   bool initialStructure();
   bool visualInitialAlign();
   bool relativePose(Matrix3d &relative_R, Vector3d &relative_T, int &l);
@@ -47,8 +51,8 @@ class Estimator {
   void double2vector();
   bool failureDetection();
 
+ public:
   enum SolverFlag { INITIAL, NON_LINEAR };
-
   enum MarginalizationFlag { MARGIN_OLD = 0, MARGIN_SECOND_NEW = 1 };
 
   SolverFlag solver_flag;
@@ -125,3 +129,5 @@ class Estimator {
   Quaterniond relo_relative_q;
   double relo_relative_yaw;
 };
+
+}  // namespace vins
