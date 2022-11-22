@@ -8,9 +8,7 @@
 #include <ros/package.h>
 #include <ros/ros.h>
 
-#include <eigen3/Eigen/Eigen>
 #include <mutex>
-#include <opencv2/opencv.hpp>
 #include <queue>
 #include <thread>
 
