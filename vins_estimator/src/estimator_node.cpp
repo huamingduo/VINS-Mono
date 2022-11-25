@@ -96,12 +96,12 @@ std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointC
       return measurements;
     }
 
-    if (!(imu_buf.back()->header.stamp.toSec() > feature_buf.front()->header.stamp.toSec() + estimator.td)) {
+    if (imu_buf.back()->header.stamp.toSec() <= feature_buf.front()->header.stamp.toSec() + estimator.td) {
       // ROS_WARN("wait for imu, only should happen at the beginning");
       return measurements;
     }
 
-    if (!(imu_buf.front()->header.stamp.toSec() < feature_buf.front()->header.stamp.toSec() + estimator.td)) {
+    if (imu_buf.front()->header.stamp.toSec() >= feature_buf.front()->header.stamp.toSec() + estimator.td) {
       ROS_WARN("throw img, only should happen at the beginning");
       feature_buf.pop();
       continue;
@@ -193,7 +193,7 @@ void process() {
 
     m_estimator.lock();
     for (auto &measurement : measurements) {
-      auto img_msg = measurement.second;
+      auto &img_msg = measurement.second;
       double dx = 0, dy = 0, dz = 0, rx = 0, ry = 0, rz = 0;
       for (auto &imu_msg : measurement.first) {
         double t = imu_msg->header.stamp.toSec();

@@ -31,9 +31,10 @@ class Estimator {
   void setParameter();
 
   // interface
-  void processIMU(double t, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
-  void processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const std_msgs::Header &header);
-  void setReloFrame(double _frame_stamp, int _frame_index, vector<Vector3d> &_match_points, Vector3d _relo_t, Matrix3d _relo_r);
+  void processIMU(double t, const Eigen::Vector3d &linear_acceleration, const Eigen::Vector3d &angular_velocity);
+  void processImage(const std::map<int, std::vector<std::pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const std_msgs::Header &header);
+  void setReloFrame(double _frame_stamp, int _frame_index, std::vector<Eigen::Vector3d> &_match_points, Eigen::Vector3d _relo_t,
+                    Eigen::Matrix3d _relo_r);
 
   // internal
   void clearState();
@@ -41,7 +42,7 @@ class Estimator {
  private:
   bool initialStructure();
   bool visualInitialAlign();
-  bool relativePose(Matrix3d &relative_R, Vector3d &relative_T, int &l);
+  bool relativePose(Eigen::Matrix3d &relative_R, Eigen::Vector3d &relative_T, int &l);
   void slideWindow();
   void solveOdometry();
   void slideWindowNew();
@@ -57,30 +58,30 @@ class Estimator {
 
   SolverFlag solver_flag;
   MarginalizationFlag marginalization_flag;
-  Vector3d g;
+  Eigen::Vector3d g;
   MatrixXd Ap[2], backup_A;
   VectorXd bp[2], backup_b;
 
-  Matrix3d ric[NUM_OF_CAM];
-  Vector3d tic[NUM_OF_CAM];
+  Eigen::Matrix3d ric[NUM_OF_CAM];
+  Eigen::Vector3d tic[NUM_OF_CAM];
 
-  Vector3d Ps[(WINDOW_SIZE + 1)];
-  Vector3d Vs[(WINDOW_SIZE + 1)];
-  Matrix3d Rs[(WINDOW_SIZE + 1)];
-  Vector3d Bas[(WINDOW_SIZE + 1)];
-  Vector3d Bgs[(WINDOW_SIZE + 1)];
+  Eigen::Vector3d Ps[(WINDOW_SIZE + 1)];
+  Eigen::Vector3d Vs[(WINDOW_SIZE + 1)];
+  Eigen::Matrix3d Rs[(WINDOW_SIZE + 1)];
+  Eigen::Vector3d Bas[(WINDOW_SIZE + 1)];
+  Eigen::Vector3d Bgs[(WINDOW_SIZE + 1)];
   double td;
 
-  Matrix3d back_R0, last_R, last_R0;
-  Vector3d back_P0, last_P, last_P0;
+  Eigen::Matrix3d back_R0, last_R, last_R0;
+  Eigen::Vector3d back_P0, last_P, last_P0;
   std_msgs::Header Headers[(WINDOW_SIZE + 1)];
 
   IntegrationBase *pre_integrations[(WINDOW_SIZE + 1)];
-  Vector3d acc_0, gyr_0;
+  Eigen::Vector3d acc_0, gyr_0;
 
-  vector<double> dt_buf[(WINDOW_SIZE + 1)];
-  vector<Vector3d> linear_acceleration_buf[(WINDOW_SIZE + 1)];
-  vector<Vector3d> angular_velocity_buf[(WINDOW_SIZE + 1)];
+  std::vector<double> dt_buf[(WINDOW_SIZE + 1)];
+  std::vector<Eigen::Vector3d> linear_acceleration_buf[(WINDOW_SIZE + 1)];
+  std::vector<Eigen::Vector3d> angular_velocity_buf[(WINDOW_SIZE + 1)];
 
   int frame_count;
   int sum_of_outlier, sum_of_back, sum_of_front, sum_of_invalid;
@@ -93,9 +94,9 @@ class Estimator {
   bool is_valid, is_key;
   bool failure_occur;
 
-  vector<Vector3d> point_cloud;
-  vector<Vector3d> margin_cloud;
-  vector<Vector3d> key_poses;
+  std::vector<Eigen::Vector3d> point_cloud;
+  std::vector<Eigen::Vector3d> margin_cloud;
+  std::vector<Eigen::Vector3d> key_poses;
   double initial_timestamp;
 
   double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];
@@ -109,9 +110,9 @@ class Estimator {
   int loop_window_index;
 
   MarginalizationInfo *last_marginalization_info;
-  vector<double *> last_marginalization_parameter_blocks;
+  std::vector<double *> last_marginalization_parameter_blocks;
 
-  map<double, ImageFrame> all_image_frame;
+  std::map<double, ImageFrame> all_image_frame;
   IntegrationBase *tmp_pre_integration;
 
   // relocalization variable
@@ -119,14 +120,14 @@ class Estimator {
   double relo_frame_stamp;
   double relo_frame_index;
   int relo_frame_local_index;
-  vector<Vector3d> match_points;
+  std::vector<Eigen::Vector3d> match_points;
   double relo_Pose[SIZE_POSE];
-  Matrix3d drift_correct_r;
-  Vector3d drift_correct_t;
-  Vector3d prev_relo_t;
-  Matrix3d prev_relo_r;
-  Vector3d relo_relative_t;
-  Quaterniond relo_relative_q;
+  Eigen::Matrix3d drift_correct_r;
+  Eigen::Vector3d drift_correct_t;
+  Eigen::Vector3d prev_relo_t;
+  Eigen::Matrix3d prev_relo_r;
+  Eigen::Vector3d relo_relative_t;
+  Eigen::Quaterniond relo_relative_q;
   double relo_relative_yaw;
 };
 
