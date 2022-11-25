@@ -46,8 +46,7 @@ void Estimator::clearState() {
   }
 
   solver_flag = INITIAL;
-  first_imu = false, sum_of_back = 0;
-  sum_of_front = 0;
+  first_imu = false;
   frame_count = 0;
   initial_timestamp = 0;
   all_image_frame.clear();
@@ -152,7 +151,6 @@ void Estimator::processImage(const std::map<int, std::vector<std::pair<int, Eige
         last_P = Ps[WINDOW_SIZE];
         last_R0 = Rs[0];
         last_P0 = Ps[0];
-
       } else
         slideWindow();
     } else
@@ -187,36 +185,34 @@ void Estimator::processImage(const std::map<int, std::vector<std::pair<int, Eige
 }
 
 bool Estimator::initialStructure() {
-  TicToc t_sfm;
   // check imu observibility
   {
-    std::map<double, ImageFrame>::iterator frame_it;
-    Eigen::Vector3d sum_g;
-    for (frame_it = all_image_frame.begin(), frame_it++; frame_it != all_image_frame.end(); frame_it++) {
+    Eigen::Vector3d sum_g = Eigen::Vector3d::Zero();
+    for (auto frame_it = std::next(all_image_frame.begin()); frame_it != all_image_frame.end(); ++frame_it) {
       double dt = frame_it->second.pre_integration->sum_dt;
       Eigen::Vector3d tmp_g = frame_it->second.pre_integration->delta_v / dt;
       sum_g += tmp_g;
     }
-    Eigen::Vector3d aver_g;
-    aver_g = sum_g * 1.0 / ((int)all_image_frame.size() - 1);
-    double var = 0;
-    for (frame_it = all_image_frame.begin(), frame_it++; frame_it != all_image_frame.end(); frame_it++) {
+    Eigen::Vector3d aver_g = sum_g * 1.0 / ((int)all_image_frame.size() - 1);
+    double var = 0.;
+    for (auto frame_it = std::next(all_image_frame.begin()); frame_it != all_image_frame.end(); ++frame_it) {
       double dt = frame_it->second.pre_integration->sum_dt;
       Eigen::Vector3d tmp_g = frame_it->second.pre_integration->delta_v / dt;
       var += (tmp_g - aver_g).transpose() * (tmp_g - aver_g);
-      // cout << "frame g " << tmp_g.transpose() << endl;
     }
     var = sqrt(var / ((int)all_image_frame.size() - 1));
     // ROS_WARN("IMU variation %f!", var);
     if (var < 0.25) {
-      ROS_INFO("IMU excitation not enouth!");
+      ROS_INFO("IMU excitation not enough!");
       // return false;
     }
   }
+
   // global sfm
-  Quaterniond Q[frame_count + 1];
+  Eigen::Quaterniond Q[frame_count + 1];
   Eigen::Vector3d T[frame_count + 1];
   std::map<int, Eigen::Vector3d> sfm_tracked_points;
+
   std::vector<SFMFeature> sfm_f;
   for (auto &it_per_id : f_manager.feature) {
     int imu_j = it_per_id.start_frame - 1;
@@ -230,6 +226,7 @@ bool Estimator::initialStructure() {
     }
     sfm_f.push_back(tmp_feature);
   }
+
   Eigen::Matrix3d relative_R;
   Eigen::Vector3d relative_T;
   int l;
@@ -418,7 +415,7 @@ void Estimator::vector2double() {
     para_Pose[i][0] = Ps[i].x();
     para_Pose[i][1] = Ps[i].y();
     para_Pose[i][2] = Ps[i].z();
-    Quaterniond q{Rs[i]};
+    Eigen::Quaterniond q{Rs[i]};
     para_Pose[i][3] = q.x();
     para_Pose[i][4] = q.y();
     para_Pose[i][5] = q.z();
@@ -440,7 +437,7 @@ void Estimator::vector2double() {
     para_Ex_Pose[i][0] = tic[i].x();
     para_Ex_Pose[i][1] = tic[i].y();
     para_Ex_Pose[i][2] = tic[i].z();
-    Quaterniond q{ric[i]};
+    Eigen::Quaterniond q{ric[i]};
     para_Ex_Pose[i][3] = q.x();
     para_Ex_Pose[i][4] = q.y();
     para_Ex_Pose[i][5] = q.z();
@@ -461,17 +458,18 @@ void Estimator::double2vector() {
     origin_P0 = last_P0;
     failure_occur = 0;
   }
-  Eigen::Vector3d origin_R00 = Utility::R2ypr(Quaterniond(para_Pose[0][6], para_Pose[0][3], para_Pose[0][4], para_Pose[0][5]).toRotationMatrix());
+  Eigen::Vector3d origin_R00 =
+      Utility::R2ypr(Eigen::Quaterniond(para_Pose[0][6], para_Pose[0][3], para_Pose[0][4], para_Pose[0][5]).toRotationMatrix());
   double y_diff = origin_R0.x() - origin_R00.x();
   // TODO
   Eigen::Matrix3d rot_diff = Utility::ypr2R(Eigen::Vector3d(y_diff, 0, 0));
   if (abs(abs(origin_R0.y()) - 90) < 1.0 || abs(abs(origin_R00.y()) - 90) < 1.0) {
     ROS_DEBUG("euler singular point!");
-    rot_diff = Rs[0] * Quaterniond(para_Pose[0][6], para_Pose[0][3], para_Pose[0][4], para_Pose[0][5]).toRotationMatrix().transpose();
+    rot_diff = Rs[0] * Eigen::Quaterniond(para_Pose[0][6], para_Pose[0][3], para_Pose[0][4], para_Pose[0][5]).toRotationMatrix().transpose();
   }
 
   for (int i = 0; i <= WINDOW_SIZE; i++) {
-    Rs[i] = rot_diff * Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
+    Rs[i] = rot_diff * Eigen::Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
 
     Ps[i] = rot_diff * Eigen::Vector3d(para_Pose[i][0] - para_Pose[0][0], para_Pose[i][1] - para_Pose[0][1], para_Pose[i][2] - para_Pose[0][2]) +
             origin_P0;
@@ -485,7 +483,7 @@ void Estimator::double2vector() {
 
   for (int i = 0; i < NUM_OF_CAM; i++) {
     tic[i] = Eigen::Vector3d(para_Ex_Pose[i][0], para_Ex_Pose[i][1], para_Ex_Pose[i][2]);
-    ric[i] = Quaterniond(para_Ex_Pose[i][6], para_Ex_Pose[i][3], para_Ex_Pose[i][4], para_Ex_Pose[i][5]).toRotationMatrix();
+    ric[i] = Eigen::Quaterniond(para_Ex_Pose[i][6], para_Ex_Pose[i][3], para_Ex_Pose[i][4], para_Ex_Pose[i][5]).toRotationMatrix();
   }
 
   VectorXd dep = f_manager.getDepthVector();
@@ -497,7 +495,7 @@ void Estimator::double2vector() {
   if (relocalization_info) {
     Eigen::Matrix3d relo_r;
     Eigen::Vector3d relo_t;
-    relo_r = rot_diff * Quaterniond(relo_Pose[6], relo_Pose[3], relo_Pose[4], relo_Pose[5]).normalized().toRotationMatrix();
+    relo_r = rot_diff * Eigen::Quaterniond(relo_Pose[6], relo_Pose[3], relo_Pose[4], relo_Pose[5]).normalized().toRotationMatrix();
     relo_t = rot_diff * Eigen::Vector3d(relo_Pose[0] - para_Pose[0][0], relo_Pose[1] - para_Pose[0][1], relo_Pose[2] - para_Pose[0][2]) + origin_P0;
     double drift_correct_yaw;
     drift_correct_yaw = Utility::R2ypr(prev_relo_r).x() - Utility::R2ypr(relo_r).x();
@@ -544,7 +542,7 @@ bool Estimator::failureDetection() {
   }
   Eigen::Matrix3d tmp_R = Rs[WINDOW_SIZE];
   Eigen::Matrix3d delta_R = tmp_R.transpose() * last_R;
-  Quaterniond delta_Q(delta_R);
+  Eigen::Quaterniond delta_Q(delta_R);
   double delta_angle;
   delta_angle = acos(delta_Q.w()) * 2.0 / 3.14 * 180.0;
   if (delta_angle > 50) {
@@ -915,14 +913,10 @@ void Estimator::slideWindow() {
 }
 
 // real marginalization is removed in solve_ceres()
-void Estimator::slideWindowNew() {
-  sum_of_front++;
-  f_manager.removeFront(frame_count);
-}
+void Estimator::slideWindowNew() { f_manager.removeFront(frame_count); }
+
 // real marginalization is removed in solve_ceres()
 void Estimator::slideWindowOld() {
-  sum_of_back++;
-
   bool shift_depth = solver_flag == NON_LINEAR ? true : false;
   if (shift_depth) {
     Eigen::Matrix3d R0, R1;
