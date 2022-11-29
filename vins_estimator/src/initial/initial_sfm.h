@@ -13,7 +13,6 @@ struct SFMFeature {
   std::vector<std::pair<int, Eigen::Vector2d>> observation;
 
   double position[3];
-  double depth;
 };
 
 struct ReprojectionError3D {
