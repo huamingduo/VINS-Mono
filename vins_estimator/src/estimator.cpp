@@ -133,7 +133,7 @@ void Estimator::processImage(const std::map<int, std::vector<std::pair<int, Eige
 
   ImageFrame imageframe(image, header.stamp.toSec());
   imageframe.pre_integration = tmp_pre_integration;
-  all_image_frame.insert(make_pair(header.stamp.toSec(), imageframe));
+  all_image_frame.insert(std::make_pair(header.stamp.toSec(), imageframe));
   tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};
 
   if (ESTIMATE_EXTRINSIC == 2) {
@@ -151,13 +151,19 @@ void Estimator::processImage(const std::map<int, std::vector<std::pair<int, Eige
     }
   }
 
-  if (solver_flag == INITIAL) {
-    if (frame_count == WINDOW_SIZE) {
+  switch (solver_flag) {
+    case SolverFlag::INITIAL: {
+      if (frame_count != WINDOW_SIZE) {
+        ++frame_count;
+        break;
+      }
+
       bool result = false;
       if (ESTIMATE_EXTRINSIC != 2 && (header.stamp.toSec() - initial_timestamp) > 0.1) {
         result = initialStructure();
         initial_timestamp = header.stamp.toSec();
       }
+
       if (result) {
         solver_flag = NON_LINEAR;
         solveOdometry();
@@ -168,36 +174,42 @@ void Estimator::processImage(const std::map<int, std::vector<std::pair<int, Eige
         last_P = Ps[WINDOW_SIZE];
         last_R0 = Rs[0];
         last_P0 = Ps[0];
-      } else
+      } else {
         slideWindow();
-    } else
-      frame_count++;
-  } else {
-    TicToc t_solve;
-    solveOdometry();
-    ROS_DEBUG("solver costs: %fms", t_solve.toc());
+      }
 
-    if (failureDetection()) {
-      ROS_WARN("failure detection!");
-      failure_occur = 1;
-      clearState();
-      setParameter();
-      ROS_WARN("system reboot!");
-      return;
-    }
+    } break;
+    case SolverFlag::NON_LINEAR: {
+      TicToc t_solve;
+      solveOdometry();
+      ROS_DEBUG("solver costs: %fms", t_solve.toc());
 
-    TicToc t_margin;
-    slideWindow();
-    f_manager.removeFailures();
-    ROS_DEBUG("marginalization costs: %fms", t_margin.toc());
-    // prepare output of VINS
-    key_poses.clear();
-    for (int i = 0; i <= WINDOW_SIZE; i++) key_poses.push_back(Ps[i]);
+      if (failureDetection()) {
+        ROS_WARN("failure detection!");
+        failure_occur = 1;
+        clearState();
+        setParameter();
+        ROS_WARN("system reboot!");
+        return;
+      }
 
-    last_R = Rs[WINDOW_SIZE];
-    last_P = Ps[WINDOW_SIZE];
-    last_R0 = Rs[0];
-    last_P0 = Ps[0];
+      TicToc t_margin;
+      slideWindow();
+      f_manager.removeFailures();
+      ROS_DEBUG("marginalization costs: %fms", t_margin.toc());
+      // prepare output of VINS
+      key_poses.clear();
+      for (int i = 0; i <= WINDOW_SIZE; i++) {
+        key_poses.push_back(Ps[i]);
+      }
+
+      last_R = Rs[WINDOW_SIZE];
+      last_P = Ps[WINDOW_SIZE];
+      last_R0 = Rs[0];
+      last_P0 = Ps[0];
+    } break;
+    default:
+      break;
   }
 }
 
@@ -235,7 +247,7 @@ bool Estimator::initialStructure() {
     for (auto &it_per_frame : it_per_id.feature_per_frame) {
       imu_j++;
       Eigen::Vector3d pts_j = it_per_frame.point;
-      tmp_feature.observation.push_back(make_pair(imu_j, Eigen::Vector2d{pts_j.x(), pts_j.y()}));
+      tmp_feature.observation.push_back(std::make_pair(imu_j, Eigen::Vector2d{pts_j.x(), pts_j.y()}));
     }
     sfm_f.push_back(tmp_feature);
   }
@@ -292,7 +304,7 @@ bool Estimator::initialStructure() {
         Eigen::Vector3d world_pts = it->second;
         cv::Point3f pts_3(world_pts(0), world_pts(1), world_pts(2));
         pts_3_vector.push_back(pts_3);
-        Vector2d img_pts = i_p.second.head<2>();
+        Eigen::Vector2d img_pts = i_p.second.head<2>();
         cv::Point2f pts_2(img_pts(0), img_pts(1));
         pts_2_vector.push_back(pts_2);
       }
@@ -337,8 +349,8 @@ bool Estimator::relativePose(Eigen::Matrix3d &relative_R, Eigen::Vector3d &relat
     }
     double sum_parallax = 0;
     for (int j = 0; j < int(corres.size()); j++) {
-      Vector2d pts_0(corres[j].first(0), corres[j].first(1));
-      Vector2d pts_1(corres[j].second(0), corres[j].second(1));
+      Eigen::Vector2d pts_0(corres[j].first(0), corres[j].first(1));
+      Eigen::Vector2d pts_1(corres[j].second(0), corres[j].second(1));
       sum_parallax += (pts_0 - pts_1).norm();
     }
     double average_parallax = sum_parallax / int(corres.size());
