@@ -1,5 +1,7 @@
 #include "estimator.h"
 
+#include "refactor/feature.h"
+
 namespace vins {
 
 Estimator::Estimator() : f_manager{Rs} {
@@ -238,18 +240,14 @@ bool Estimator::initialStructure() {
   }
 
   // global sfm
-  std::vector<SFMFeature> sfm_f;
-  for (auto &it_per_id : f_manager.feature) {
-    int imu_j = it_per_id.start_frame - 1;
-    SFMFeature tmp_feature;
-    tmp_feature.state = false;
-    tmp_feature.id = it_per_id.feature_id;
-    for (auto &it_per_frame : it_per_id.feature_per_frame) {
-      imu_j++;
-      Eigen::Vector3d pts_j = it_per_frame.point;
-      tmp_feature.observation.push_back(std::make_pair(imu_j, Eigen::Vector2d{pts_j.x(), pts_j.y()}));
+  std::vector<Feature> sfm_features;
+  for (const auto &feature : f_manager.feature) {
+    int frame_id = feature.start_frame;
+    Feature temp{feature.feature_id};
+    for (const auto &frame : feature.feature_per_frame) {
+      temp.InsertObservation(frame_id++, frame.point);
     }
-    sfm_f.push_back(tmp_feature);
+    sfm_features.push_back(temp);
   }
 
   Eigen::Matrix3d relative_R;
@@ -264,7 +262,7 @@ bool Estimator::initialStructure() {
   Eigen::Quaterniond Q[frame_count + 1];
   Eigen::Vector3d T[frame_count + 1];
   std::map<int, Eigen::Vector3d> sfm_tracked_points;
-  if (!sfm.construct(frame_count + 1, Q, T, l, relative_R, relative_T, sfm_f, sfm_tracked_points)) {
+  if (!sfm.construct(frame_count + 1, Q, T, l, relative_R, relative_T, sfm_features, sfm_tracked_points)) {
     ROS_DEBUG("global SFM failed!");
     marginalization_flag = MARGIN_OLD;
     return false;

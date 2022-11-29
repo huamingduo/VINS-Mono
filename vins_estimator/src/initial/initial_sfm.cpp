@@ -1,5 +1,7 @@
 #include "initial_sfm.h"
 
+namespace vins {
+
 void GlobalSFM::triangulatePoint(const Eigen::Matrix<double, 3, 4> &Pose0, const Eigen::Matrix<double, 3, 4> &Pose1, const Eigen::Vector2d &point0,
                                  const Eigen::Vector2d &point1, Eigen::Vector3d &point_3d) {
   Eigen::Matrix4d design_matrix = Eigen::Matrix4d::Zero();
@@ -13,27 +15,30 @@ void GlobalSFM::triangulatePoint(const Eigen::Matrix<double, 3, 4> &Pose0, const
   point_3d(2) = triangulated_point(2) / triangulated_point(3);
 }
 
-bool GlobalSFM::solveFrameByPnP(Eigen::Matrix3d &R_initial, Eigen::Vector3d &P_initial, int i, std::vector<SFMFeature> &sfm_f) {
+bool GlobalSFM::solveFrameByPnP(Eigen::Matrix3d &R_initial, Eigen::Vector3d &P_initial, int i, std::vector<Feature> &sfm_f) {
   std::vector<cv::Point2f> pts_2_vector;
   std::vector<cv::Point3f> pts_3_vector;
-  for (int j = 0; j < feature_num; j++) {
-    if (sfm_f[j].state != true) continue;
-    Eigen::Vector2d point2d;
-    for (int k = 0; k < (int)sfm_f[j].observation.size(); k++) {
-      if (sfm_f[j].observation[k].first == i) {
-        Eigen::Vector2d img_pts = sfm_f[j].observation[k].second;
-        cv::Point2f pts_2(img_pts(0), img_pts(1));
-        pts_2_vector.push_back(pts_2);
-        cv::Point3f pts_3(sfm_f[j].position[0], sfm_f[j].position[1], sfm_f[j].position[2]);
-        pts_3_vector.push_back(pts_3);
+  for (const auto &feature : sfm_f) {
+    if (feature.global_position().isZero()) {
+      continue;
+    }
+
+    for (const auto &observation : feature.observations()) {
+      if (observation.frame_id == i) {
+        pts_2_vector.push_back(cv::Point2f(observation.point.x(), observation.point.y()));
+        pts_3_vector.push_back(cv::Point3f(feature.global_position().x(), feature.global_position().y(), feature.global_position().z()));
         break;
       }
     }
   }
-  if (int(pts_2_vector.size()) < 15) {
+
+  if (pts_2_vector.size() < 15) {
     printf("unstable features tracking, please slowly move you device!\n");
-    if (int(pts_2_vector.size()) < 10) return false;
+    if (pts_2_vector.size() < 10) {
+      return false;
+    }
   }
+
   cv::Mat r, rvec, t, D, tmp_r;
   cv::eigen2cv(R_initial, tmp_r);
   cv::Rodrigues(tmp_r, rvec);
@@ -56,23 +61,21 @@ bool GlobalSFM::solveFrameByPnP(Eigen::Matrix3d &R_initial, Eigen::Vector3d &P_i
 }
 
 void GlobalSFM::triangulateTwoFrames(int frame0, const Eigen::Matrix<double, 3, 4> &Pose0, int frame1, const Eigen::Matrix<double, 3, 4> &Pose1,
-                                     std::vector<SFMFeature> &sfm_f) {
+                                     std::vector<Feature> &sfm_f) {
   assert(frame0 != frame1);
-  for (int j = 0; j < feature_num; j++) {
-    if (sfm_f[j].state) {
+  for (auto &feature : sfm_f) {
+    if (!feature.global_position().isZero()) {
       continue;
     }
 
     bool has_0 = false, has_1 = false;
-    Eigen::Vector2d point0;
-    Eigen::Vector2d point1;
-    for (const auto &item : sfm_f[j].observation) {
-      if (item.first == frame0) {
-        point0 = item.second;
+    Eigen::Vector2d point0, point1;
+    for (const auto &item : feature.observations()) {
+      if (item.frame_id == frame0) {
+        point0 = item.point.head<2>();
         has_0 = true;
-      }
-      if (item.first == frame1) {
-        point1 = item.second;
+      } else if (item.frame_id == frame1) {
+        point1 = item.point.head<2>();
         has_1 = true;
       }
     }
@@ -80,10 +83,7 @@ void GlobalSFM::triangulateTwoFrames(int frame0, const Eigen::Matrix<double, 3, 
     if (has_0 && has_1) {
       Eigen::Vector3d point_3d;
       triangulatePoint(Pose0, Pose1, point0, point1, point_3d);
-      sfm_f[j].state = true;
-      sfm_f[j].position[0] = point_3d(0);
-      sfm_f[j].position[1] = point_3d(1);
-      sfm_f[j].position[2] = point_3d(2);
+      feature.mutable_global_position() = point_3d;
     }
   }
 }
@@ -94,7 +94,7 @@ void GlobalSFM::triangulateTwoFrames(int frame0, const Eigen::Matrix<double, 3, 
 // relative_q[i][j]  j_q_i
 // relative_t[i][j]  j_t_ji  (j < i)
 bool GlobalSFM::construct(int frame_num, Eigen::Quaterniond *q, Eigen::Vector3d *T, int l, const Eigen::Matrix3d relative_R,
-                          const Eigen::Vector3d relative_T, std::vector<SFMFeature> &sfm_f, std::map<int, Eigen::Vector3d> &sfm_tracked_points) {
+                          const Eigen::Vector3d relative_T, std::vector<Feature> &sfm_f, std::map<int, Eigen::Vector3d> &sfm_tracked_points) {
   feature_num = sfm_f.size();
   // cout << "set 0 and " << l << " as known " << endl;
   //  have relative_r relative_t
@@ -166,23 +166,20 @@ bool GlobalSFM::construct(int frame_num, Eigen::Quaterniond *q, Eigen::Vector3d 
     triangulateTwoFrames(i, Pose[i], l, Pose[l], sfm_f);
   }
   // 5: triangulate all other points
-  for (int j = 0; j < feature_num; j++) {
-    if (sfm_f[j].state == true) {
+  for (auto &feature : sfm_f) {
+    if (!feature.global_position().isZero() || feature.observations().size() < 2) {
       continue;
     }
-    if ((int)sfm_f[j].observation.size() >= 2) {
-      Eigen::Vector2d point0, point1;
-      int frame_0 = sfm_f[j].observation[0].first;
-      point0 = sfm_f[j].observation[0].second;
-      int frame_1 = sfm_f[j].observation.back().first;
-      point1 = sfm_f[j].observation.back().second;
-      Eigen::Vector3d point_3d;
-      triangulatePoint(Pose[frame_0], Pose[frame_1], point0, point1, point_3d);
-      sfm_f[j].state = true;
-      sfm_f[j].position[0] = point_3d(0);
-      sfm_f[j].position[1] = point_3d(1);
-      sfm_f[j].position[2] = point_3d(2);
-    }
+
+    const int prev_frame = feature.observations().front().frame_id;
+    const int next_frame = feature.observations().back().frame_id;
+    const Eigen::Vector2d prev_point = feature.observations().front().point.head<2>();
+    const Eigen::Vector2d next_point = feature.observations().back().point.head<2>();
+
+    Eigen::Vector3d point_3d;
+    triangulatePoint(Pose[prev_frame], Pose[next_frame], prev_point, next_point, point_3d);
+
+    feature.mutable_global_position() = point_3d;
   }
 
   // full BA
@@ -207,17 +204,18 @@ bool GlobalSFM::construct(int frame_num, Eigen::Quaterniond *q, Eigen::Vector3d 
     }
   }
 
-  for (int i = 0; i < feature_num; i++) {
-    if (sfm_f[i].state != true) {
+  for (auto &feature : sfm_f) {
+    if (feature.global_position().isZero()) {
       continue;
     }
-    for (int j = 0; j < int(sfm_f[i].observation.size()); j++) {
-      int l = sfm_f[i].observation[j].first;
-      ceres::CostFunction *cost_function = ReprojectionError3D::Create(sfm_f[i].observation[j].second.x(), sfm_f[i].observation[j].second.y());
 
-      problem.AddResidualBlock(cost_function, NULL, c_rotation[l], c_translation[l], sfm_f[i].position);
+    for (const auto &observation : feature.observations()) {
+      const int index = observation.frame_id;
+      ceres::CostFunction *cost_function = ReprojectionError3D::Create(observation.point.x(), observation.point.y());
+      problem.AddResidualBlock(cost_function, NULL, c_rotation[index], c_translation[index], feature.mutable_global_position().data());
     }
   }
+
   ceres::Solver::Options options;
   options.linear_solver_type = ceres::DENSE_SCHUR;
   // options.minimizer_progress_to_stdout = true;
@@ -244,11 +242,15 @@ bool GlobalSFM::construct(int frame_num, Eigen::Quaterniond *q, Eigen::Vector3d 
     T[i] = -1 * (q[i] * Eigen::Vector3d(c_translation[i][0], c_translation[i][1], c_translation[i][2]));
   }
 
-  for (int i = 0; i < (int)sfm_f.size(); i++) {
-    if (sfm_f[i].state) {
-      sfm_tracked_points[sfm_f[i].id] = Eigen::Vector3d(sfm_f[i].position[0], sfm_f[i].position[1], sfm_f[i].position[2]);
+  for (const auto &feature : sfm_f) {
+    if (feature.global_position().isZero()) {
+      continue;
     }
+
+    sfm_tracked_points[feature.feature_id()] = feature.global_position();
   }
 
   return true;
 }
+
+}  // namespace vins

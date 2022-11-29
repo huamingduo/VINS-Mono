@@ -7,6 +7,10 @@
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/opencv.hpp>
 
+#include "../refactor/feature.h"
+
+namespace vins {
+
 struct SFMFeature {
   bool state;
   int id;
@@ -45,15 +49,17 @@ class GlobalSFM {
   GlobalSFM() {}
 
   bool construct(int frame_num, Eigen::Quaterniond *q, Eigen::Vector3d *T, int l, const Eigen::Matrix3d relative_R, const Eigen::Vector3d relative_T,
-                 std::vector<SFMFeature> &sfm_f, std::map<int, Eigen::Vector3d> &sfm_tracked_points);
+                 std::vector<Feature> &sfm_f, std::map<int, Eigen::Vector3d> &sfm_tracked_points);
 
  private:
-  bool solveFrameByPnP(Eigen::Matrix3d &R_initial, Eigen::Vector3d &P_initial, int i, std::vector<SFMFeature> &sfm_f);
+  bool solveFrameByPnP(Eigen::Matrix3d &R_initial, Eigen::Vector3d &P_initial, int i, std::vector<Feature> &sfm_f);
 
   void triangulatePoint(const Eigen::Matrix<double, 3, 4> &Pose0, const Eigen::Matrix<double, 3, 4> &Pose1, const Eigen::Vector2d &point0,
                         const Eigen::Vector2d &point1, Eigen::Vector3d &point_3d);
   void triangulateTwoFrames(int frame0, const Eigen::Matrix<double, 3, 4> &Pose0, int frame1, const Eigen::Matrix<double, 3, 4> &Pose1,
-                            std::vector<SFMFeature> &sfm_f);
+                            std::vector<Feature> &sfm_f);
 
   int feature_num;
 };
+
+}  // namespace vins
