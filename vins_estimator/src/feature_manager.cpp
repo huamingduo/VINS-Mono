@@ -1,11 +1,17 @@
 #include "feature_manager.h"
 
+#include <ros/assert.h>
+#include <ros/console.h>
+
+using namespace std;
+using namespace Eigen;
+
 namespace vins {
 
-int FeaturePerId::endFrame() { return start_frame + feature_per_frame.size() - 1; }
-
 FeatureManager::FeatureManager(Matrix3d _Rs[]) : Rs(_Rs) {
-  for (int i = 0; i < NUM_OF_CAM; i++) ric[i].setIdentity();
+  for (int i = 0; i < NUM_OF_CAM; i++) {
+    ric[i].setIdentity();
+  }
 }
 
 void FeatureManager::setRic(Matrix3d _ric[]) {
@@ -13,8 +19,6 @@ void FeatureManager::setRic(Matrix3d _ric[]) {
     ric[i] = _ric[i];
   }
 }
-
-void FeatureManager::clearState() { feature.clear(); }
 
 int FeatureManager::getFeatureCount() {
   int cnt = 0;
@@ -49,7 +53,9 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     }
   }
 
-  if (frame_count < 2 || last_track_num < 20) return true;
+  if (frame_count < 2 || last_track_num < 20) {
+    return true;
+  }
 
   for (auto &it_per_id : feature) {
     if (it_per_id.start_frame <= frame_count - 2 && it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1) {
@@ -118,13 +124,6 @@ void FeatureManager::setDepth(const VectorXd &x) {
   }
 }
 
-void FeatureManager::removeFailures() {
-  for (auto it = feature.begin(), it_next = feature.begin(); it != feature.end(); it = it_next) {
-    it_next++;
-    if (it->solve_flag == 2) feature.erase(it);
-  }
-}
-
 void FeatureManager::clearDepth(const VectorXd &x) {
   int feature_index = -1;
   for (auto &it_per_id : feature) {
@@ -139,12 +138,10 @@ VectorXd FeatureManager::getDepthVector() {
   int feature_index = -1;
   for (auto &it_per_id : feature) {
     it_per_id.used_num = it_per_id.feature_per_frame.size();
-    if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2)) continue;
-#if 1
+    if (it_per_id.used_num < 2 || it_per_id.start_frame >= WINDOW_SIZE - 2) {
+      continue;
+    }
     dep_vec(++feature_index) = 1. / it_per_id.estimated_depth;
-#else
-    dep_vec(++feature_index) = it_per_id->estimated_depth;
-#endif
   }
   return dep_vec;
 }
@@ -198,111 +195,106 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[]) 
   }
 }
 
+void FeatureManager::removeFailures() {
+  for (auto it = feature.begin(); it != feature.end();) {
+    if (it->solve_flag == 2) {
+      it = feature.erase(it);
+    } else {
+      it = std::next(it);
+    }
+  }
+}
+
 void FeatureManager::removeOutlier() {
   ROS_BREAK();
-  int i = -1;
-  for (auto it = feature.begin(), it_next = feature.begin(); it != feature.end(); it = it_next) {
-    it_next++;
-    i += it->used_num != 0;
-    if (it->used_num != 0 && it->is_outlier == true) {
-      feature.erase(it);
+  for (auto it = feature.begin(); it != feature.end();) {
+    if (it->used_num != 0 && it->is_outlier) {
+      it = feature.erase(it);
+    } else {
+      it = std::next(it);
     }
   }
 }
 
 void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P) {
-  for (auto it = feature.begin(), it_next = feature.begin(); it != feature.end(); it = it_next) {
-    it_next++;
-
-    if (it->start_frame != 0)
+  for (auto it = feature.begin(); it != feature.end();) {
+    if (it->start_frame != 0) {
       it->start_frame--;
-    else {
-      Eigen::Vector3d uv_i = it->feature_per_frame[0].point;
-      it->feature_per_frame.erase(it->feature_per_frame.begin());
-      if (it->feature_per_frame.size() < 2) {
-        feature.erase(it);
-        continue;
-      } else {
-        Eigen::Vector3d pts_i = uv_i * it->estimated_depth;
-        Eigen::Vector3d w_pts_i = marg_R * pts_i + marg_P;
-        Eigen::Vector3d pts_j = new_R.transpose() * (w_pts_i - new_P);
-        double dep_j = pts_j(2);
-        if (dep_j > 0)
-          it->estimated_depth = dep_j;
-        else
-          it->estimated_depth = INIT_DEPTH;
-      }
+      continue;
     }
-    // remove tracking-lost feature after marginalize
-    /*
-    if (it->endFrame() < WINDOW_SIZE - 1)
-    {
-        feature.erase(it);
+
+    it->feature_per_frame.erase(it->feature_per_frame.begin());
+    if (it->feature_per_frame.size() < 2) {
+      it = feature.erase(it);
+      continue;
     }
-    */
+
+    Eigen::Vector3d uv_i = it->feature_per_frame[0].point;
+    Eigen::Vector3d pts_i = uv_i * it->estimated_depth;
+    Eigen::Vector3d w_pts_i = marg_R * pts_i + marg_P;
+    Eigen::Vector3d pts_j = new_R.transpose() * (w_pts_i - new_P);
+    double dep_j = pts_j(2);
+    if (dep_j > 0)
+      it->estimated_depth = dep_j;
+    else
+      it->estimated_depth = INIT_DEPTH;
+    it = std::next(it);
   }
 }
 
-void FeatureManager::removeBack() {
-  for (auto it = feature.begin(), it_next = feature.begin(); it != feature.end(); it = it_next) {
-    it_next++;
-
-    if (it->start_frame != 0)
+void FeatureManager::RemoveEarliestFrame() {
+  for (auto it = feature.begin(); it != feature.end();) {
+    if (it->start_frame != 0) {
       it->start_frame--;
-    else {
-      it->feature_per_frame.erase(it->feature_per_frame.begin());
-      if (it->feature_per_frame.size() == 0) feature.erase(it);
+      continue;
+    }
+
+    it->feature_per_frame.erase(it->feature_per_frame.begin());
+    if (it->feature_per_frame.empty()) {
+      it = feature.erase(it);
+    } else {
+      it = std::next(it);
     }
   }
 }
 
-void FeatureManager::removeFront(int frame_count) {
-  for (auto it = feature.begin(), it_next = feature.begin(); it != feature.end(); it = it_next) {
-    it_next++;
-
+void FeatureManager::RemoveLatestFrame(int frame_count) {
+  for (auto it = feature.begin(); it != feature.end();) {
     if (it->start_frame == frame_count) {
       it->start_frame--;
+      continue;
+    } else if (it->endFrame() < frame_count - 1) {
+      continue;
+    }
+
+    int j = WINDOW_SIZE - 1 - it->start_frame;
+    it->feature_per_frame.erase(it->feature_per_frame.begin() + j);
+    if (it->feature_per_frame.size() == 0) {
+      it = feature.erase(it);
     } else {
-      int j = WINDOW_SIZE - 1 - it->start_frame;
-      if (it->endFrame() < frame_count - 1) continue;
-      it->feature_per_frame.erase(it->feature_per_frame.begin() + j);
-      if (it->feature_per_frame.size() == 0) feature.erase(it);
+      it = std::next(it);
     }
   }
 }
 
-double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int frame_count) {
+double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int frame_count) const {
   // check the second last frame is keyframe or not
-  // parallax betwwen seconde last frame and third last frame
+  // parallax betwwen second last frame and third last frame
   const FeaturePerFrame &frame_i = it_per_id.feature_per_frame[frame_count - 2 - it_per_id.start_frame];
   const FeaturePerFrame &frame_j = it_per_id.feature_per_frame[frame_count - 1 - it_per_id.start_frame];
 
-  double ans = 0;
-  Vector3d p_j = frame_j.point;
+  const Vector3d &p_i = frame_i.point;
+  const Vector3d &p_j = frame_j.point;
 
-  double u_j = p_j(0);
-  double v_j = p_j(1);
+  const double u_i = p_i(0) / p_i(2);
+  const double v_i = p_i(1) / p_i(2);
+  const double u_j = p_j(0);
+  const double v_j = p_j(1);
 
-  Vector3d p_i = frame_i.point;
-  Vector3d p_i_comp;
+  const double du = u_i - u_j;
+  const double dv = v_i - v_j;
 
-  // int r_i = frame_count - 2;
-  // int r_j = frame_count - 1;
-  // p_i_comp = ric[camera_id_j].transpose() * Rs[r_j].transpose() * Rs[r_i] * ric[camera_id_i] * p_i;
-  p_i_comp = p_i;
-  double dep_i = p_i(2);
-  double u_i = p_i(0) / dep_i;
-  double v_i = p_i(1) / dep_i;
-  double du = u_i - u_j, dv = v_i - v_j;
-
-  double dep_i_comp = p_i_comp(2);
-  double u_i_comp = p_i_comp(0) / dep_i_comp;
-  double v_i_comp = p_i_comp(1) / dep_i_comp;
-  double du_comp = u_i_comp - u_j, dv_comp = v_i_comp - v_j;
-
-  ans = max(ans, sqrt(min(du * du + dv * dv, du_comp * du_comp + dv_comp * dv_comp)));
-
-  return ans;
+  return std::hypot(du, dv);
 }
 
 }  // namespace vins

@@ -57,16 +57,15 @@ class Estimator {
 
   SolverFlag solver_flag;
   MarginalizationFlag marginalization_flag;
-  Eigen::Vector3d g;
 
-  Eigen::Matrix3d ric[NUM_OF_CAM];
-  Eigen::Vector3d tic[NUM_OF_CAM];
-
-  Eigen::Vector3d Ps[(WINDOW_SIZE + 1)];
-  Eigen::Vector3d Vs[(WINDOW_SIZE + 1)];
-  Eigen::Matrix3d Rs[(WINDOW_SIZE + 1)];
-  Eigen::Vector3d Bas[(WINDOW_SIZE + 1)];
-  Eigen::Vector3d Bgs[(WINDOW_SIZE + 1)];
+  Eigen::Vector3d g;                       // gravity vector
+  Eigen::Matrix3d ric[NUM_OF_CAM];         // rotation from other camera to camera
+  Eigen::Vector3d tic[NUM_OF_CAM];         // translation from other camera to camera
+  Eigen::Vector3d Ps[(WINDOW_SIZE + 1)];   // position/translation from camera to global
+  Eigen::Vector3d Vs[(WINDOW_SIZE + 1)];   // velocity
+  Eigen::Matrix3d Rs[(WINDOW_SIZE + 1)];   // rotation from camera to global
+  Eigen::Vector3d Bas[(WINDOW_SIZE + 1)];  // bias of acceleration
+  Eigen::Vector3d Bgs[(WINDOW_SIZE + 1)];  // bias of gyroscope
   double td;
 
   Eigen::Vector3d acc_0, gyr_0;
@@ -75,8 +74,9 @@ class Estimator {
   std_msgs::Header Headers[(WINDOW_SIZE + 1)];
 
   FeatureManager f_manager;
-  std::vector<Eigen::Vector3d> key_poses;
+  std::vector<Eigen::Vector3d> key_poses;  // only for visualization
 
+  // relocalization
   double relo_frame_stamp;
   double relo_frame_index;
   Eigen::Matrix3d drift_correct_r;
@@ -86,35 +86,37 @@ class Estimator {
   double relo_relative_yaw;
 
  private:
+  bool first_imu;
+  bool failure_occur;
+  double initial_timestamp;
+
   Eigen::Matrix3d back_R0, last_R, last_R0;
   Eigen::Vector3d back_P0, last_P, last_P0;
 
+  // important
+  std::map<double, ImageFrame> all_image_frame;
+  IntegrationBase *tmp_pre_integration;
   IntegrationBase *pre_integrations[(WINDOW_SIZE + 1)];
 
+  // mainly for storing data
   std::vector<double> dt_buf[(WINDOW_SIZE + 1)];
   std::vector<Eigen::Vector3d> linear_acceleration_buf[(WINDOW_SIZE + 1)];
   std::vector<Eigen::Vector3d> angular_velocity_buf[(WINDOW_SIZE + 1)];
   int frame_count;
 
-  MotionEstimator m_estimator;
-  InitialEXRotation initial_ex_rotation;
+  MotionEstimator m_estimator;            // for solving relative pose
+  InitialEXRotation initial_ex_rotation;  // initialize ric
 
-  bool first_imu;
-  bool failure_occur;
-
-  double initial_timestamp;
-  double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];
-  double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];
-  double para_Feature[NUM_OF_F][SIZE_FEATURE];
-  double para_Ex_Pose[NUM_OF_CAM][SIZE_POSE];
-  double para_Td[1][1];
-
+  // for ceres-solver
+  double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];            // related to Ps, Rs
+  double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];  // related to Vs, Bas, Bgs
+  double para_Feature[NUM_OF_F][SIZE_FEATURE];             //
+  double para_Ex_Pose[NUM_OF_CAM][SIZE_POSE];              // related to ric, tic
+  double para_Td[1][1];                                    // related to td
   MarginalizationInfo *last_marginalization_info;
   std::vector<double *> last_marginalization_parameter_blocks;
 
-  std::map<double, ImageFrame> all_image_frame;
-  IntegrationBase *tmp_pre_integration;
-
+  // relocalization
   bool relocalization_info;
   int relo_frame_local_index;
   std::vector<Eigen::Vector3d> match_points;
