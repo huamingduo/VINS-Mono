@@ -1,5 +1,8 @@
 #include "initial_sfm.h"
 
+#include <opencv2/core/eigen.hpp>
+#include <opencv2/opencv.hpp>
+
 namespace vins {
 
 void GlobalSFM::triangulatePoint(const Eigen::Matrix<double, 3, 4> &Pose0, const Eigen::Matrix<double, 3, 4> &Pose1, const Eigen::Vector2d &point0,

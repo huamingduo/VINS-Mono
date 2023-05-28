@@ -60,7 +60,7 @@ class FeatureManager {
   void triangulate(Eigen::Vector3d Ps[], Eigen::Vector3d tic[], Eigen::Matrix3d ric[]);
 
   void removeFailures();
-  void removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P);
+  void RemoveEarliestFrameAndShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P);
   void RemoveEarliestFrame();
   void RemoveLatestFrame(int frame_count);
   void removeOutlier();

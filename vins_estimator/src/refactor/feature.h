@@ -5,16 +5,16 @@
 namespace vins {
 
 struct Observation {
-  const int frame_id;
-  const double stamp;
+  double stamp = -1.;
+  int frame_id = -1;
 
   Eigen::Vector3d point = -Eigen::Vector3d::Ones();  // normalized feature position (with z = 1) in current camera frame
   Eigen::Vector2d pixel = -Eigen::Vector2d::Ones();  // feature pixel position in current camera frame
   Eigen::Vector2d flow = Eigen::Vector2d::Zero();    // feature pixel flow speed
 
   Observation() = delete;
-  Observation(const double& t) : frame_id(-1), stamp(t) {}
-  Observation(const int& f) : frame_id(f), stamp(-1.) {}
+  Observation(const double& t) : stamp(t) {}
+  Observation(const int& f) : frame_id(f) {}
 };
 
 class Feature {
@@ -44,7 +44,32 @@ class Feature {
     observations_.push_back(observation);
   }
 
- private:
+  void RemoveObservationAtFrame(const int& frame_id = 0) {
+    if (start_frame_id_ == -1 || frame_id < start_frame_id_ || frame_id > end_frame_id_) {
+      return;
+    }
+
+    for (auto it = observations_.begin(); it != observations_.end();) {
+      if (it->frame_id != frame_id) {
+        if (it->frame_id > frame_id) {
+          --it->frame_id;
+        }
+        it = std::next(it);
+        continue;
+      }
+
+      it = observations_.erase(it);
+    }
+
+    --end_frame_id_;
+    if (start_frame_id_ > end_frame_id_) {
+      start_frame_id_ = -1;
+      end_frame_id_ = -1;
+      global_position_ = Eigen::Vector3d::Zero();
+      observations_.clear();
+    }
+  }
+
  private:
   const int feature_id_;
   int start_frame_id_ = -1;

@@ -874,7 +874,6 @@ void Estimator::optimization() {
 void Estimator::slideWindow() {
   switch (marginalization_flag) {
     case MARGIN_OLD: {
-      double t_0 = Headers[0].stamp.toSec();
       back_R0 = Rs[0];
       back_P0 = Ps[0];
       if (frame_count != WINDOW_SIZE) {
@@ -912,19 +911,17 @@ void Estimator::slideWindow() {
       angular_velocity_buf[WINDOW_SIZE].clear();
 
       if (true || solver_flag == INITIAL) {
-        std::map<double, ImageFrame>::iterator it_0;
-        it_0 = all_image_frame.find(t_0);
-        delete it_0->second.pre_integration;
-        it_0->second.pre_integration = nullptr;
-
-        for (std::map<double, ImageFrame>::iterator it = all_image_frame.begin(); it != it_0; ++it) {
-          if (it->second.pre_integration) delete it->second.pre_integration;
+        const double t_0 = Headers[0].stamp.toSec();
+        const auto it_0 = all_image_frame.find(t_0);
+        for (auto it = all_image_frame.begin(); it != std::next(it_0); ++it) {
+          if (it->second.pre_integration) {
+            delete it->second.pre_integration;
+          }
           it->second.pre_integration = nullptr;
         }
-
-        all_image_frame.erase(all_image_frame.begin(), it_0);
-        all_image_frame.erase(t_0);
+        all_image_frame.erase(all_image_frame.begin(), std::next(it_0));
       }
+
       slideWindowOld();
     } break;
     case MARGIN_SECOND_NEW: {
@@ -972,13 +969,11 @@ void Estimator::slideWindowNew() { f_manager.RemoveLatestFrame(frame_count); }
 void Estimator::slideWindowOld() {
   bool shift_depth = solver_flag == NON_LINEAR ? true : false;
   if (shift_depth) {
-    Eigen::Matrix3d R0, R1;
-    Eigen::Vector3d P0, P1;
-    R0 = back_R0 * ric[0];
-    R1 = Rs[0] * ric[0];
-    P0 = back_P0 + back_R0 * tic[0];
-    P1 = Ps[0] + Rs[0] * tic[0];
-    f_manager.removeBackShiftDepth(R0, P0, R1, P1);
+    Eigen::Matrix3d R0 = back_R0 * ric[0];
+    Eigen::Matrix3d R1 = Rs[0] * ric[0];
+    Eigen::Vector3d P0 = back_P0 + back_R0 * tic[0];
+    Eigen::Vector3d P1 = Ps[0] + Rs[0] * tic[0];
+    f_manager.RemoveEarliestFrameAndShiftDepth(R0, P0, R1, P1);
   } else
     f_manager.RemoveEarliestFrame();
 }

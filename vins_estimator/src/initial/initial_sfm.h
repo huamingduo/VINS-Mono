@@ -3,10 +3,6 @@
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
 
-#include <eigen3/Eigen/Dense>
-#include <opencv2/core/eigen.hpp>
-#include <opencv2/opencv.hpp>
-
 #include "../refactor/feature.h"
 
 namespace vins {

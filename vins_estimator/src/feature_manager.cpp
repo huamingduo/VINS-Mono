@@ -183,11 +183,7 @@ void FeatureManager::triangulate(Eigen::Vector3d Ps[], Eigen::Vector3d tic[], Ei
     ROS_ASSERT(svd_idx == svd_A.rows());
     Eigen::Vector4d svd_V = Eigen::JacobiSVD<Eigen::MatrixXd>(svd_A, Eigen::ComputeThinV).matrixV().rightCols<1>();
     double svd_method = svd_V[2] / svd_V[3];
-    // it_per_id->estimated_depth = -b / A;
-    // it_per_id->estimated_depth = svd_V[2] / svd_V[3];
-
     it_per_id.estimated_depth = svd_method;
-    // it_per_id->estimated_depth = INIT_DEPTH;
 
     if (it_per_id.estimated_depth < 0.1) {
       it_per_id.estimated_depth = INIT_DEPTH;
@@ -216,10 +212,10 @@ void FeatureManager::removeOutlier() {
   }
 }
 
-void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P) {
+void FeatureManager::RemoveEarliestFrameAndShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P) {
   for (auto it = feature.begin(); it != feature.end();) {
     if (it->start_frame != 0) {
-      it->start_frame--;
+      --it->start_frame;
       continue;
     }
 
@@ -229,15 +225,11 @@ void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3
       continue;
     }
 
-    Eigen::Vector3d uv_i = it->feature_per_frame[0].point;
-    Eigen::Vector3d pts_i = uv_i * it->estimated_depth;
-    Eigen::Vector3d w_pts_i = marg_R * pts_i + marg_P;
-    Eigen::Vector3d pts_j = new_R.transpose() * (w_pts_i - new_P);
-    double dep_j = pts_j(2);
-    if (dep_j > 0)
-      it->estimated_depth = dep_j;
-    else
-      it->estimated_depth = INIT_DEPTH;
+    const Eigen::Vector3d uv_i = it->feature_per_frame[0].point;
+    const Eigen::Vector3d pts_i = uv_i * it->estimated_depth;
+    const Eigen::Vector3d w_pts_i = marg_R * pts_i + marg_P;
+    const Eigen::Vector3d pts_j = new_R.transpose() * (w_pts_i - new_P);
+    it->estimated_depth = pts_j[2] > 0. ? pts_j[2] : INIT_DEPTH;
     it = std::next(it);
   }
 }
@@ -245,7 +237,7 @@ void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3
 void FeatureManager::RemoveEarliestFrame() {
   for (auto it = feature.begin(); it != feature.end();) {
     if (it->start_frame != 0) {
-      it->start_frame--;
+      --it->start_frame;
       continue;
     }
 
@@ -261,7 +253,7 @@ void FeatureManager::RemoveEarliestFrame() {
 void FeatureManager::RemoveLatestFrame(int frame_count) {
   for (auto it = feature.begin(); it != feature.end();) {
     if (it->start_frame == frame_count) {
-      it->start_frame--;
+      --it->start_frame;
       continue;
     } else if (it->endFrame() < frame_count - 1) {
       continue;
